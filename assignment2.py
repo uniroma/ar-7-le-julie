@@ -1,8 +1,10 @@
 import numpy as np
+import pandas as pd
 import scipy 
 from scipy.stats import norm, multivariate_normal
 
 def unconditional_ar_mean_variance(c, phis, sigma2):
+
     ## The length of phis is p
     p = len(phis)
     A = np.zeros((p, p))
@@ -29,15 +31,6 @@ def unconditional_ar_mean_variance(c, phis, sigma2):
     Sigma = scipy.linalg.solve_discrete_lyapunov(A, Q)
     
     return mu.ravel(), Sigma, stationary
-
-# Example usage:
-phis = [0.2, -0.1, 0.05, -0.05, 0.02, -0.02, 0.01]
-c = 0
-sigma2 = 0.5
-mu, Sigma, stationary = unconditional_ar_mean_variance(c, phis, sigma2)
-print("The process is stationary:", stationary)
-print("Mean vector (mu):", mu)
-print("Variance-covariance matrix (Sigma);", Sigma)
 
 
 def lagged_matrix(Y, max_lag=7):
@@ -85,19 +78,78 @@ def uncond_loglikelihood_ar7(params, y):
     return uloglik
     
 
-## Example
-params = np.array([
-    0.0, ## c
-    0.2, -0.1, 0.05, -0.05, 0.02, -0.02, 0.01, ## phi
-    1.0 ## sigma2    
-    ])
+## Unconditional - define the negative loglikelihood
 
-## Fake data
-y = np.random.normal(size=100)
+## Starting value. 
+## These estimates should be close to the OLS
 
-## The conditional distribution
-a=cond_loglikelihood_ar7(params, y)
-## The unconditional distribution
-b=uncond_loglikelihood_ar7(params, y)
+# Importing data and applying transformation to get log differences
 
-print(a,b)
+df = pd.read_csv("/Users/lavin/Downloads/current (1).csv")
+df_cleaned = df.drop(index=0)
+df_cleaned.reset_index(drop=True, inplace=True)
+df_cleaned['sasdate'] = pd.to_datetime(df_cleaned['sasdate'], format='%m/%d/%Y')
+
+transformation_codes = df.iloc[0, 1:].to_frame().reset_index()
+transformation_codes.columns = ['Series', 'Transformation_Code']
+
+def apply_transformation(series, code):
+    if code == 1:
+        # No transformation
+        return series
+    elif code == 2:
+        # First difference
+        return series.diff()
+    elif code == 3:
+        # Second difference
+        return series.diff().diff()
+    elif code == 4:
+        # Log
+        return np.log(series)
+    elif code == 5:
+        # First difference of log
+        return np.log(series).diff()
+    elif code == 6:
+        # Second difference of log
+        return np.log(series).diff().diff()
+    elif code == 7:
+        # Delta (x_t/x_{t-1} - 1)
+        return series.pct_change()
+    else:
+        raise ValueError("Invalid transformation code")
+
+for series_name, code in transformation_codes.values:
+    df_cleaned[series_name] = apply_transformation(df_cleaned[series_name].astype(float), float(code))
+
+df_cleaned = df_cleaned[2:]
+df_cleaned.reset_index(drop=True, inplace=True)
+df_cleaned.head()
+
+
+X = lagged_matrix(df_cleaned['INDPRO'], 7)
+yf = df_cleaned['INDPRO'][7:]
+Xf = np.hstack((np.ones((772,1)), X[7:,:]))
+beta = np.linalg.solve(Xf.T@Xf, Xf.T@yf)
+sigma2_hat = np.mean((yf - Xf@beta)**2)
+
+params = np.hstack((beta, sigma2_hat))
+
+def cobj(params, y): 
+    return - cond_loglikelihood_ar7(params, y)
+
+results_cond = scipy.optimize.minimize(cobj, params, args = df_cleaned['INDPRO'], method='L-BFGS-B')
+
+def uobj(params, y): 
+    return - uncond_loglikelihood_ar7(params,y)
+
+bounds_constant = tuple((-np.inf, np.inf) for _ in range(1))
+bounds_phi = tuple((-1, 1) for _ in range(7))
+bounds_sigma = tuple((0,np.inf) for _ in range(1))
+bounds = bounds_constant + bounds_phi + bounds_sigma
+
+## L-BFGS-B support bounds
+results_uncond = scipy.optimize.minimize(uobj, results.x, args = df_cleaned['INDPRO'], method='L-BFGS-B', bounds = bounds)
+
+# results_cond.x are the parameters obtained through conditional likelihood maximisation.
+# They are the same as the OLS parameters, which are stored in params. 
+# results_uncond.x are the parameters obtained through unconditional likelihood maximisation.

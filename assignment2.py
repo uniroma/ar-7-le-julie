@@ -154,7 +154,7 @@ results_uncond = scipy.optimize.minimize(uobj, results_cond.x, args = df_cleaned
 # They are the same as the OLS parameters, which are stored in params. 
 # results_uncond.x are the parameters obtained through unconditional likelihood maximisation.
 
-def ar7_forecast(previous_data, phi, sigma, constant, forecast_steps):
+def ar7_forecast(previous_data, phi, constant, forecast_steps):
     forecasted_values = np.zeros(forecast_steps)
     data = np.concatenate((previous_data, forecasted_values))
     for i in range(len(previous_data), len(previous_data) + forecast_steps):
@@ -166,7 +166,7 @@ original_time_series = df_cleaned['INDPRO']
 
 # Forecast future values
 
-forecasted_values_cond = ar7_forecast(original_time_series, phi = results_cond.x[1:8], sigma = results_cond.x[8], constant = results_cond.x[0], forecast_steps = 8)
-forecasted_values_uncond = ar7_forecast(original_time_series, phi = results_uncond.x[1:8], sigma = results_uncond.x[8], constant = results_uncond.x[0], forecast_steps = 8)
+forecasted_values_cond = ar7_forecast(original_time_series, phi = results_cond.x[1:8], constant = results_cond.x[0], forecast_steps = 8)
+forecasted_values_uncond = ar7_forecast(original_time_series, phi = results_uncond.x[1:8], constant = results_uncond.x[0], forecast_steps = 8)
 print(f'The values forecasted through conditional likelihood maximisation are: {forecasted_values_cond}')
 print(f'The values forecasted through unconditional likelihood maximisation are: {forecasted_values_uncond}')

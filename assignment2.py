@@ -148,13 +148,11 @@ bounds_sigma = tuple((0,np.inf) for _ in range(1))
 bounds = bounds_constant + bounds_phi + bounds_sigma
 
 ## L-BFGS-B support bounds
-results_uncond = scipy.optimize.minimize(uobj, results.x, args = df_cleaned['INDPRO'], method='L-BFGS-B', bounds = bounds)
+results_uncond = scipy.optimize.minimize(uobj, results_cond.x, args = df_cleaned['INDPRO'], method='L-BFGS-B', bounds = bounds)
 
 # results_cond.x are the parameters obtained through conditional likelihood maximisation.
 # They are the same as the OLS parameters, which are stored in params. 
 # results_uncond.x are the parameters obtained through unconditional likelihood maximisation.
-
-#possible forecasting function
 
 def ar7_forecast(previous_data, phi, sigma, constant, forecast_steps):
     forecasted_values = np.zeros(forecast_steps)

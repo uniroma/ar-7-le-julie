@@ -154,19 +154,65 @@ results_uncond = scipy.optimize.minimize(uobj, results_cond.x, args = df_cleaned
 # They are the same as the OLS parameters, which are stored in params. 
 # results_uncond.x are the parameters obtained through unconditional likelihood maximisation.
 
-def ar7_forecast(previous_data, phi, constant, forecast_steps):
-    forecasted_values = np.zeros(forecast_steps)
-    data = np.concatenate((previous_data, forecasted_values))
-    for i in range(len(previous_data), len(previous_data) + forecast_steps):
-        forecasted_values[i - len(previous_data)] = np.dot(phi, data[i - len(phi):i][::-1]) + constant
-        data[i] = forecasted_values[i - len(previous_data)]
+# Forecasting future values for the next 8 periods
+
+def ar_forecast (data, phi, p, h):
+    forecasted_values = np.zeros(h)
+    for i in range(h):
+        # Construct the lagged values for the autoregressive model
+        lagged_values = np.flip(data[-p:])
+        # Calculate the forecasted value using the autoregressive model
+        forecasted_values[i] = np.dot(phi, np.concatenate(([1], lagged_values)))
+        # Append the forecasted value to the time series for the next forecast iteration
+        data = np.append(data, forecasted_values[i])
+    
     return forecasted_values
 
-original_time_series = df_cleaned['INDPRO']
+forecasted_values_cond = ar_forecast(df_cleaned['INDPRO'], phi = results_cond.x[0:8], p = 7, h = 8)
+forecasted_values_uncond = ar_forecast(df_cleaned['INDPRO'], phi = results_uncond.x[0:8], p = 7, h = 8)
+print(f'The values forecasted through conditional likelihood maximization are: {forecasted_values_cond}\nThe values forecasted through unconditional likelihood maximization are: {forecasted_values_uncond}')
 
-# Forecast future values
+# Comparing the accuracy of the forecasts
 
-forecasted_values_cond = ar7_forecast(original_time_series, phi = results_cond.x[1:8], constant = results_cond.x[0], forecast_steps = 8)
-forecasted_values_uncond = ar7_forecast(original_time_series, phi = results_uncond.x[1:8], constant = results_uncond.x[0], forecast_steps = 8)
-print(f'The values forecasted through conditional likelihood maximisation are: {forecasted_values_cond}')
-print(f'The values forecasted through unconditional likelihood maximisation are: {forecasted_values_uncond}')
+def evalforecast (phis):
+    e = []
+    Y_hat = []
+    Y_actual = []
+    for j in range(0, 289):
+        yhat = ar_forecast(data = df_cleaned['INDPRO'][:489+j], phi = phis, p = 7, h = 1)
+        Y_hat.append(yhat.flatten())
+        yactual=df_cleaned['INDPRO'][490+j]
+        Y_actual.append(yactual.flatten())
+        ehat = yactual - yhat
+        e.append(ehat.flatten())
+    return (Y_actual, Y_hat, e)
+
+condforecast = evalforecast(phis = results_cond.x[0:8])
+uncondforecast = evalforecast(phis = results_uncond.x[0:8])
+
+# Plotting actual data vs data forecasted with conditional and unconditional MLE
+
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+dates= pd.to_datetime(df_cleaned['sasdate'], format='%m/%d/%Y')
+titles = ['Conditional Likelihood Maximisation', 'Unconditional Likelihood Maximisation']
+forecasts = [condforecast, uncondforecast]
+
+fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+for i, ax in enumerate(axs):
+    ax.plot(dates[490:], forecasts[i][1], label='Forecasted data')
+    ax.plot(dates[490:], forecasts[i][0], label='Actual data')
+    ax.set_title(titles[i])
+    ax.legend()
+plt.tight_layout()
+plt.show()
+
+# Comparing mean squared forecast errors
+
+e_cond, e_uncond = pd.DataFrame(condforecast[2]), pd.DataFrame(uncondforecast[2])
+msfe_cond, msfe_uncond = (e_cond.apply(np.square).mean()), (e_uncond.apply(np.square).mean())
+msfe_cond, msfe_uncond = float(msfe_cond.iloc[0]), float(msfe_uncond.iloc[0])
+
+print(f'The MSFE of the forecast obtained through conditional MLE is: {msfe_cond:.10f}\nThe MSFE of the forecast obtained through unconditional MLE is: {msfe_uncond:.10f}')
+

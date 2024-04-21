@@ -174,21 +174,25 @@ print(f'The values forecasted through conditional likelihood maximization are: {
 
 # Comparing the accuracy of the forecasts
 
-def evalforecast (phis):
+series = df_cleaned['INDPRO'][:600]
+results_cond = scipy.optimize.minimize(cobj, params, args = series, method='L-BFGS-B')
+results_uncond = scipy.optimize.minimize(uobj, results_cond.x, args = series, method='L-BFGS-B', bounds = bounds)
+
+def evalforecast (phis, i, n):
     e = []
     Y_hat = []
     Y_actual = []
-    for j in range(0, 289):
-        yhat = ar_forecast(data = df_cleaned['INDPRO'][:489+j], phi = phis, p = 7, h = 1)
+    for j in range(0, i):
+        yhat = ar_forecast(data = df_cleaned['INDPRO'][:n+j], phi = phis, p = 7, h = 1)
         Y_hat.append(yhat.flatten())
-        yactual=df_cleaned['INDPRO'][490+j]
+        yactual=df_cleaned['INDPRO'][n+1+j]
         Y_actual.append(yactual.flatten())
         ehat = yactual - yhat
         e.append(ehat.flatten())
     return (Y_actual, Y_hat, e)
 
-condforecast = evalforecast(phis = results_cond.x[0:8])
-uncondforecast = evalforecast(phis = results_uncond.x[0:8])
+condforecast = evalforecast(phis = results_cond.x[0:8], i = 178, n = 600)
+uncondforecast = evalforecast(phis = results_uncond.x[0:8],i = 178, n = 600)
 
 # Plotting actual data vs data forecasted with conditional and unconditional MLE
 
@@ -201,8 +205,8 @@ forecasts = [condforecast, uncondforecast]
 
 fig, axs = plt.subplots(1, 2, figsize=(12, 5))
 for i, ax in enumerate(axs):
-    ax.plot(dates[490:], forecasts[i][1], label='Forecasted data')
-    ax.plot(dates[490:], forecasts[i][0], label='Actual data')
+    ax.plot(dates[601:], forecasts[i][1], label='Forecasted data')
+    ax.plot(dates[601:], forecasts[i][0], label='Actual data') 
     ax.set_title(titles[i])
     ax.legend()
 plt.tight_layout()
